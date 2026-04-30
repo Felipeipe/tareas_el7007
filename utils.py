@@ -43,11 +43,7 @@ def convolution(img: np.ndarray, filter: np.ndarray):
     out = np.zeros(img.shape)
     for i in range(img_height):
         for j in range(img_width):
-            value = 0.0
-            for fi in range(filter_height):
-                for fj in range(filter_width):
-                    value += padded_img[i + fi, j + fj] * filter[fi, fj]
-            out[i, j] = value
+            out[i, j] = np.sum(padded_img[i:i+filter_height, j:j+filter_width] * filter)
     return out
 
 if __name__ == '__main__':
