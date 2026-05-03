@@ -4,47 +4,48 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils import convolution, draw_rectangles, get_corners, get_index, load_coords
+from utils import convolution, create_conv_filter, draw_rectangles, get_corners, get_index, non_max_suppression
 
 
 def main():
     img_name = "grid_symbols.png"
     plot_dir = "plots"
     conv_thresh = 200
-    detection_thresh = 1.25e8
+    detection_thresh = 0.7e8
+    noisy_name = "grid_symbols_blurred.png"
+    coord_filename = "coords_basic.npy"
 
     path = os.path.join("media", img_name)
+    noisy_path = os.path.join("media", noisy_name)
     img = cv2.imread(path)
-    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # type: ignore
-    img_shape = gray_img.shape
-    _, binary_img = cv2.threshold(gray_img, conv_thresh, 255, cv2.THRESH_BINARY)
-    kern = np.array(
-        [
-            [-1, -1, -1],
-            [-1, 8, -1],
-            [-1, -1, -1],
-        ]
-    )
+    noisy_img = cv2.imread(noisy_path)
+    gray_noisy = cv2.cvtColor(noisy_img, cv2.COLOR_BGR2GRAY)  # type: ignore
+    _, binary_noisy = cv2.threshold(gray_noisy, conv_thresh, 255, cv2.THRESH_BINARY)
 
-    y0, y1, x0, x1 = load_coords("coords.npy", binary_img)
-    filter_shape = (y0, y1, x0, x1)
-    print(f"{y0= }, {y1= }, {x0= }, {x1= }")
-    exclamation_mark = binary_img[y0:y1, x0:x1]
-    filtered_kernel = convolution(exclamation_mark, kern)
-    out = convolution(binary_img, filtered_kernel)
+    filtered_kernel, filter_coords = create_conv_filter(img, conv_thresh, coord_filename)
+    img_shape = binary_noisy.shape
+    out = convolution(binary_noisy, filtered_kernel)
 
     flattened_img = out.flatten()
     flat_idxs = np.where(flattened_img > detection_thresh)
     row_idxs, col_idxs = get_index(flat_idxs, img_shape)
     print(f"{row_idxs = }, {col_idxs = }")
+    scores = out[row_idxs, col_idxs]
 
-    y0_dets, y1_dets, x0_dets, x1_dets = get_corners(col_idxs, row_idxs, filter_shape)
+    keep_indices = non_max_suppression(row_idxs, col_idxs, scores, filter_coords)
+
+    final_row_idxs = row_idxs[keep_indices]
+    final_col_idxs = col_idxs[keep_indices]
+
+    print(f"Píxeles detectados originalmente: {len(scores)}")
+    print(f"Detecciones finales tras NMS: {len(keep_indices)}")
+
+    y0_dets, y1_dets, x0_dets, x1_dets = get_corners(final_col_idxs, final_row_idxs, filter_coords)
     detections = (y0_dets, y1_dets, x0_dets, x1_dets)
 
 
 
-
-# -----------------------------------------
+    # -----------------------------------------
     # 1. Filtered kernel
     # -----------------------------------------
     plt.figure(figsize=(6, 6))
@@ -62,7 +63,7 @@ def main():
     plt.imshow(out, cmap='viridis')
     plt.colorbar()
     plt.title("Matriz de Activación")
-    plt.savefig(os.path.join(plot_dir, "activation_matrix.pdf"), format="pdf", bbox_inches="tight")
+    plt.savefig(os.path.join(plot_dir, f"activation_matrix_{noisy_name}.pdf"), format="pdf", bbox_inches="tight")
     plt.close()
 
     # -----------------------------------------
@@ -78,22 +79,21 @@ def main():
     plt.title("Valor de los píxeles de la convolución")
     plt.legend(loc="best")
     plt.grid(True)
-    plt.savefig(os.path.join(plot_dir, "histogram.pdf"), format="pdf", bbox_inches="tight")
+    plt.savefig(os.path.join(plot_dir, f"histogram_thresh_{detection_thresh:.2e}_{noisy_name}.pdf"), format="pdf", bbox_inches="tight")
     plt.close()
 
     # -----------------------------------------
     # 4. Bounding box image
     # -----------------------------------------
-    bb_img = draw_rectangles(img, detections)
+    bb_img = draw_rectangles(noisy_img, detections)
 
-    # ¡Importante! Convertir de BGR (OpenCV) a RGB (Matplotlib)
     bb_img_rgb = cv2.cvtColor(bb_img, cv2.COLOR_BGR2RGB)
 
     plt.figure(figsize=(10, 10))
     plt.imshow(bb_img_rgb)
     plt.title("Cajas de Detección")
     plt.axis("off") # Ocultamos los ejes
-    plt.savefig(os.path.join(plot_dir, "bounding_boxes.pdf"), format="pdf", bbox_inches="tight")
+    plt.savefig(os.path.join(plot_dir, f"bounding_boxes_thresh_{detection_thresh:.2e}_{noisy_name}.pdf"), format="pdf", bbox_inches="tight")
     plt.close()
 
 

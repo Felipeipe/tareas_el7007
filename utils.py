@@ -35,7 +35,25 @@ def select_roi_opencv(
 
 
 def get_index(flat_idx, img_shape):
-    return np.unravel_index(flat_idx, img_shape)
+    row, col = np.unravel_index(flat_idx, img_shape)
+    return row.flatten(), col.flatten()
+
+
+def create_conv_filter(img, conv_thresh, coord_filename):
+    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # type: ignore
+    _, binary_img = cv2.threshold(gray_img, conv_thresh, 255, cv2.THRESH_BINARY)
+    kern = np.array(
+        [
+            [-1, -1, -1],
+            [-1, 8, -1],
+            [-1, -1, -1],
+        ]
+    )
+
+    y0, y1, x0, x1 = load_coords(coord_filename, binary_img)
+    filter_coords = y0, y1, x0, x1
+    exclamation_mark = binary_img[y0:y1, x0:x1]
+    return convolution(exclamation_mark, kern), filter_coords
 
 
 def get_corners(cx, cy, filter_shape):
@@ -50,6 +68,47 @@ def get_corners(cx, cy, filter_shape):
 
     return y0.flatten(), y1.flatten(), x0.flatten(), x1.flatten()
 
+
+def non_max_suppression(row_idxs, col_idxs, scores, filter_shape):
+    if len(scores) == 0:
+        return []
+
+    y0, y1, x0, x1 = filter_shape
+    width = x1 - x0
+    height = y1 - y0
+
+    order = np.argsort(scores)[::-1]
+
+    keep_indices = []
+
+    while len(order) > 0:
+        current_max_idx = order[0]
+        keep_indices.append(current_max_idx)
+        if len(order) == 1:
+            break
+        cx = col_idxs[current_max_idx]
+        cy = row_idxs[current_max_idx]
+        rest_idxs = order[1:]
+        rest_cx = col_idxs[rest_idxs]
+        rest_cy = row_idxs[rest_idxs]
+        dx = np.abs(rest_cx - cx)
+        dy = np.abs(rest_cy - cy)
+        outside_neighborhood = (dx >= width) | (dy >= height)
+        order = rest_idxs[outside_neighborhood]
+
+    return keep_indices
+
+
+def get_score(detections):
+    y0_dets, y1_dets, x0_dets, x1_dets = detections
+    house_score = np.sum(y0_dets < 281)
+    p1_score = np.sum((y0_dets > 281) & (x0_dets < 269))
+    p2_score = np.sum((y0_dets > 281) & (x0_dets > 269) & (x0_dets < 537))
+    p3_score = np.sum((y0_dets > 281) & (x0_dets > 537))
+
+    return p1_score, p2_score, p3_score, house_score
+
+
 def draw_rectangles(img, detections):
     y0_dets, y1_dets, x0_dets, x1_dets = detections
     bounding_box_img = img
@@ -59,8 +118,11 @@ def draw_rectangles(img, detections):
         x1 = x1_dets[i]
         y1 = y1_dets[i]
 
-        bounding_box_img = cv2.rectangle(bounding_box_img, (x0, y0), (x1, y1), color=(0,255,0), thickness=4)
+        bounding_box_img = cv2.rectangle(
+            bounding_box_img, (x0, y0), (x1, y1), color=(0, 255, 0), thickness=4
+        )
     return bounding_box_img
+
 
 def load_coords(filename, img):
     try:
@@ -69,7 +131,7 @@ def load_coords(filename, img):
     except FileNotFoundError:
         y0, y1, x0, x1 = select_roi_opencv(img)
         coords = np.array([y0, y1, x0, x1])
-        np.save("coords.npy", coords)
+        np.save(filename, coords)
     finally:
         return y0, y1, x0, x1  # type: ignore
 
