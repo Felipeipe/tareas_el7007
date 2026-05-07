@@ -55,6 +55,21 @@ def create_conv_filter(img, conv_thresh, coord_filename):
     exclamation_mark = binary_img[y0:y1, x0:x1]
     return convolution(exclamation_mark, kern), filter_coords
 
+def create_domino_conv_filters(img, conv_thresh, coord_filename):
+    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # type: ignore
+    _, binary_img = cv2.threshold(gray_img, conv_thresh, 255, cv2.THRESH_BINARY)
+    kern = np.array(
+        [
+            [-1, -1, -1],
+            [-1, 8, -1],
+            [-1, -1, -1],
+        ]
+    )
+
+    y0, y1, x0, x1 = load_coords(coord_filename, binary_img)
+    filter_coords = y0, y1, x0, x1
+    exclamation_mark = binary_img[y0:y1, x0:x1]
+    return convolution(exclamation_mark, kern), filter_coords
 
 def get_corners(cx, cy, filter_shape):
     "gets corner coordinates given the center of detections and size of filter"

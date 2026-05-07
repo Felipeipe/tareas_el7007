@@ -4,7 +4,14 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils import convolution, create_conv_filter, draw_rectangles, get_corners, get_index, non_max_suppression
+from utils import (
+    convolution,
+    create_conv_filter,
+    draw_rectangles,
+    get_corners,
+    get_index,
+    non_max_suppression,
+)
 
 
 def main():
@@ -22,7 +29,9 @@ def main():
     gray_noisy = cv2.cvtColor(noisy_img, cv2.COLOR_BGR2GRAY)  # type: ignore
     _, binary_noisy = cv2.threshold(gray_noisy, conv_thresh, 255, cv2.THRESH_BINARY)
 
-    filtered_kernel, filter_coords = create_conv_filter(img, conv_thresh, coord_filename)
+    filtered_kernel, filter_coords = create_conv_filter(
+        img, conv_thresh, coord_filename
+    )
     img_shape = binary_noisy.shape
     out = convolution(binary_noisy, filtered_kernel)
 
@@ -40,30 +49,36 @@ def main():
     print(f"Píxeles detectados originalmente: {len(scores)}")
     print(f"Detecciones finales tras NMS: {len(keep_indices)}")
 
-    y0_dets, y1_dets, x0_dets, x1_dets = get_corners(final_col_idxs, final_row_idxs, filter_coords)
+    y0_dets, y1_dets, x0_dets, x1_dets = get_corners(
+        final_col_idxs, final_row_idxs, filter_coords
+    )
     detections = (y0_dets, y1_dets, x0_dets, x1_dets)
-
-
 
     # -----------------------------------------
     # 1. Filtered kernel
     # -----------------------------------------
     plt.figure(figsize=(6, 6))
     # Asumimos que el kernel es de un solo canal (escala de grises)
-    plt.imshow(filtered_kernel, cmap='gray')
+    plt.imshow(filtered_kernel, cmap="gray")
     plt.title("Filtro de Convolución")
     plt.axis("off")  # Oculta los ejes numéricos para que parezca una imagen pura
-    plt.savefig(os.path.join(plot_dir, "conv_filter.pdf"), format="pdf", bbox_inches="tight")
-    plt.close() # Cierra la figura para liberar memoria
+    plt.savefig(
+        os.path.join(plot_dir, "conv_filter.pdf"), format="pdf", bbox_inches="tight"
+    )
+    plt.close()  # Cierra la figura para liberar memoria
 
     # -----------------------------------------
     # 2. Heatmap plot
     # -----------------------------------------
     plt.figure(figsize=(8, 6))
-    plt.imshow(out, cmap='viridis')
+    plt.imshow(out, cmap="viridis")
     plt.colorbar()
     plt.title("Matriz de Activación")
-    plt.savefig(os.path.join(plot_dir, f"activation_matrix_{noisy_name}.pdf"), format="pdf", bbox_inches="tight")
+    plt.savefig(
+        os.path.join(plot_dir, f"activation_matrix_{noisy_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
     plt.close()
 
     # -----------------------------------------
@@ -79,7 +94,13 @@ def main():
     plt.title("Valor de los píxeles de la convolución")
     plt.legend(loc="best")
     plt.grid(True)
-    plt.savefig(os.path.join(plot_dir, f"histogram_thresh_{detection_thresh:.2e}_{noisy_name}.pdf"), format="pdf", bbox_inches="tight")
+    plt.savefig(
+        os.path.join(
+            plot_dir, f"histogram_thresh_{detection_thresh:.2e}_{noisy_name}.pdf"
+        ),
+        format="pdf",
+        bbox_inches="tight",
+    )
     plt.close()
 
     # -----------------------------------------
@@ -92,8 +113,14 @@ def main():
     plt.figure(figsize=(10, 10))
     plt.imshow(bb_img_rgb)
     plt.title("Cajas de Detección")
-    plt.axis("off") # Ocultamos los ejes
-    plt.savefig(os.path.join(plot_dir, f"bounding_boxes_thresh_{detection_thresh:.2e}_{noisy_name}.pdf"), format="pdf", bbox_inches="tight")
+    plt.axis("off")  # Ocultamos los ejes
+    plt.savefig(
+        os.path.join(
+            plot_dir, f"bounding_boxes_thresh_{detection_thresh:.2e}_{noisy_name}.pdf"
+        ),
+        format="pdf",
+        bbox_inches="tight",
+    )
     plt.close()
 
 

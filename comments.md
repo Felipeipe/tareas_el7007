@@ -21,3 +21,8 @@ quizás se mejoraría si es que se usa un umbral de binarización distinto.
 No es robusto frente al ruido ya que el valor de las activaciones baja bastante y provoca que se homogeneicen las lecturas en la matriz de activaciones, lo que provoca que sea más dificil diferenciar entre otras.
 
 Se podría usar varios filtros para poder ir descartando las lecturas incorrectas.
+
+## 4.1
+Se pudo obtener la cuenta correctamente.
+una de las opciones sería obtener el número de la carta si es que se tienen distintas pintas. esta solucion tambien serviría si es que las cartas están parcialmente ocluidas.
+Se podría tambien analizar el ángulo de la carta si es que no está ocluida y tener una lookup table que permita utilizar un filtro acorde al ángulo de la carta
