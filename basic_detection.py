@@ -16,11 +16,13 @@ from utils import (
 
 def main():
     img_name = "grid_symbols.png"
-    plot_dir = "plots"
+    plot_dir = os.path.join("plots", "basic_detection")
+    os.makedirs(plot_dir, exist_ok=True)
+
     conv_thresh = 200
     detection_thresh = 0.7e8
     noisy_name = "grid_symbols_blurred.png"
-    coord_filename = "coords_basic.npy"
+    coord_filename = os.path.join("templates","coords_basic.npy")
 
     path = os.path.join("media", img_name)
     noisy_path = os.path.join("media", noisy_name)

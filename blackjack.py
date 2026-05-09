@@ -17,10 +17,11 @@ from utils import (
 
 def main():
     img_name = "blackjack.png"
-    plot_dir = "plots"
+    plot_dir = os.path.join("plots", "blackjack")
+    os.makedirs(plot_dir, exist_ok=True)
     conv_thresh = 200
     detection_thresh = 1.155e7
-    coord_filename = "coords_blackjack.npy"
+    coord_filename = os.path.join("templates","coords_blackjack.npy")
 
     path = os.path.join("media", img_name)
     img = cv2.imread(path)

@@ -1,10 +1,11 @@
 import os
 from typing import Tuple
-import torch
-import torchvision.models as models
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
+import torch
+import torchvision.models as models
 
 
 def select_roi_opencv(
@@ -57,6 +58,7 @@ def create_conv_filter(img, conv_thresh, coord_filename):
     exclamation_mark = binary_img[y0:y1, x0:x1]
     return convolution(exclamation_mark, kern), filter_coords
 
+
 def create_domino_conv_filters(img, conv_thresh, coord_filename):
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # type: ignore
     _, binary_img = cv2.threshold(gray_img, conv_thresh, 255, cv2.THRESH_BINARY)
@@ -82,11 +84,40 @@ def load_template(filename, img=None):
         return template
     else:
         template = cv2.imread(filename)
-        template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY) # type: ignore
+        template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)  # type: ignore
 
         if template is None:
             raise ValueError(f"Could not load {filename}")
         return template
+
+
+
+def get_best_filtered_temp(filtered_template, kernels, filename=None):
+    scores = np.sum(np.abs(filtered_template), axis=(1, 2))
+    best_score_idx = np.argsort(scores)[::-1][:5]
+    best_filters = filtered_template[best_score_idx, :, :]
+    best_kernels = kernels[best_score_idx, :, :]
+
+    if filename is not None:
+        fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+
+        for i in range(len(best_filters)):
+            axes[0, i].imshow(best_filters[i], cmap="gray")
+            axes[0, i].set_title(f"Top {i + 1} Activación\n(Filtro VGG: {best_score_idx[i]})")
+            axes[0, i].axis("off")
+            axes[1, i].imshow(best_kernels[i], cmap="gray")
+            axes[1, i].set_title("Kernel")
+            axes[1, i].axis("off")
+
+        plt.tight_layout()
+        plt.savefig(filename, bbox_inches="tight")
+        plt.close(fig)
+
+    return best_filters, best_kernels
+
+def map_collapse(activation_map):
+    saliency_map = np.max(activation_map, axis=0)
+    return saliency_map
 
 def get_corners(cx, cy, filter_shape):
     "gets corner coordinates given the center of detections and size of filter"
@@ -100,6 +131,17 @@ def get_corners(cx, cy, filter_shape):
 
     return y0.flatten(), y1.flatten(), x0.flatten(), x1.flatten()
 
+
+def detect(img, template_coords, threshold=10):
+    flattened_img = img.flatten()
+    flat_idxs = np.where(flattened_img > threshold)
+    row_index, col_index = get_index(flat_idxs, img.shape)
+    scores = img[row_index, col_index]
+    keep_indices = non_max_suppression(row_index, col_index, scores, template_coords)
+    final_row_idxs = row_index[keep_indices]
+    final_col_idxs = col_index[keep_indices]
+
+    return get_corners(final_col_idxs, final_row_idxs, template_coords)
 
 def non_max_suppression(row_idxs, col_idxs, scores, filter_shape):
     if len(scores) == 0:
@@ -191,18 +233,33 @@ def convolution(img: np.ndarray, filter: np.ndarray) -> np.ndarray:
             )
     return out
 
+
 def get_filters_from_vgg():
-    model = models.vgg16(weights='DEFAULT')
+    model = models.vgg16(weights="DEFAULT")
     return torch.mean(model.features[0].weight.data, dim=1).cpu().numpy()
+
+
 
 def conv_2d(img, kern):
     n_filters = kern.shape[0]
-    height, width = img.shape
-    filtered_temp = np.zeros((n_filters, height, width))
-    for i in range(n_filters):
-        filtered_temp[i,:,:] = cv2.filter2D(img, -1, kern[i,:,:])
+    if img.ndim == 2:
+        height, width = img.shape
+        filtered_temp = np.zeros((n_filters, height, width))
+        for i in range(n_filters):
+            filtered_temp[i, :, :] = cv2.filter2D(img, -1, kern[i, :, :])
+
+    elif img.ndim == 3:
+        channels, height, width = img.shape
+        filtered_temp = np.zeros((n_filters, height, width))
+        if channels != n_filters:
+            raise ValueError(f"Number of channels ({channels}) must match with number of filters ({n_filters})")
+        for i in range(n_filters):
+            filtered_temp[i, :, :] = cv2.filter2D(img[i,:,:], -1, kern[i, :, :])
+    else:
+        raise ValueError(f"Image dimensions not supported: {img.ndim}. Must be 2 or 3.")
 
     return filtered_temp
+
 
 if __name__ == "__main__":
     img_name = "grid_symbols.png"

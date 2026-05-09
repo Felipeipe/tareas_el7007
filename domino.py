@@ -6,21 +6,19 @@ import numpy as np
 
 from utils import (
     convolution,
-    create_conv_filter,
-    draw_rectangles,
     get_corners,
     get_index,
-    get_score,
     non_max_suppression,
     create_domino_conv_filters
 )
 
 def main():
     img_name = "tablero_domino.png"
-    plot_dir = "plots"
+    plot_dir = os.path.join("plots", "domino")
+    os.makedirs(plot_dir, exist_ok=True)
     conv_thresh = 200
 
-    coord_filename = "domino.npy"
+    coord_filename = os.path.join("templates", "domino.npy")
     domino_path = os.path.join("media", "domino")
     board_img = cv2.imread(os.path.join("media", img_name))
 
