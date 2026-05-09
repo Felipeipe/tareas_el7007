@@ -26,3 +26,11 @@ Se podría usar varios filtros para poder ir descartando las lecturas incorrecta
 Se pudo obtener la cuenta correctamente.
 una de las opciones sería obtener el número de la carta si es que se tienen distintas pintas. esta solucion tambien serviría si es que las cartas están parcialmente ocluidas.
 Se podría tambien analizar el ángulo de la carta si es que no está ocluida y tener una lookup table que permita utilizar un filtro acorde al ángulo de la carta
+
+## 4.2
+
+No se pudo obtener correctamente las posiciones de las fichas. Hubieron detecciones falsas y tambien fichas que no pudieron ser detectadas con el umbral definido.
+
+Lo que se podría hacer es obtener la posición de la zona blanca de las fichas y luego contar la cantidad de puntos negros que hay en cada zona. Luego a partir de allí poder definir la coordenada respectiva. Así se resuelve el tema de las fichas rotadas y las malas detecciones con 1 solo cambio. Esta implementación funcionaría similar al conteo de puntos revisado en el item anterior.
+
+## 5

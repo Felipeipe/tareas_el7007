@@ -1,6 +1,7 @@
 import os
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches # Necesario para crear la leyenda manual
 import numpy as np
 
 from utils import (
@@ -24,21 +25,21 @@ def main():
     board_img = cv2.imread(os.path.join("media", img_name))
 
     thresholds = {
-        "1.png": 6.2e7,
-        "2.png": 5.0e7,
-        "3.png": 6e7,
-        "4.png": 6.5e7,
-        "5.png": 7.0e7,
-        "6.png": 4.5e7
+        "1.png": 7e7,
+        "2.png": 5.9e7,
+        "3.png": 6.6e7,
+        "4.png": 6.6e7,
+        "5.png": 7e7,
+        "6.png": 6.7e7
     }
 
     colors = {
-        "1.png": (0, 0, 255),   # Rojo
-        "2.png": (255, 0, 0),   # Azul
-        "3.png": (0, 255, 0),   # Verde
-        "4.png": (0, 255, 255), # Amarillo
-        "5.png": (255, 0, 255), # Magenta
-        "6.png": (255, 255, 0)  # Cian
+        "1.png": (0, 0, 255),   # Rojo BGR
+        "2.png": (255, 0, 0),   # Azul BGR
+        "3.png": (0, 255, 0),   # Verde BGR
+        "4.png": (0, 255, 255), # Amarillo BGR
+        "5.png": (255, 0, 255), # Magenta BGR
+        "6.png": (255, 255, 0)  # Cian BGR
     }
 
     final_bb_img = board_img.copy()
@@ -70,10 +71,21 @@ def main():
             final_row_idxs = row_idxs[keep_indices]
             final_col_idxs = col_idxs[keep_indices]
 
-            # print(f"--- Archivo: {filename} ---")
-            # print(f"Umbral fijo utilizado: {current_thresh:.3e}")
-            # print(f"Píxeles que superaron el umbral: {len(scores)}")
-            # print(f"Detecciones finales tras NMS: {len(final_row_idxs)}\n")
+            final_scores = scores[keep_indices]
+
+            sorted_scores = np.sort(final_scores)[::-1]
+
+            top_14_scores = sorted_scores[:14]
+
+            print(f"--- Archivo: {filename} ---")
+            print(f"Umbral fijo utilizado: {current_thresh:.3e}")
+            print(f"Píxeles que superaron el umbral: {len(scores)}")
+            print(f"Detecciones finales tras NMS: {len(final_row_idxs)}")
+
+            print("Top 14 puntajes más altos (post-NMS):")
+            for i, score_val in enumerate(top_14_scores, start=1):
+                print(f"  {i}. {score_val:.3e}")
+            print("\n")
 
             y0_dets, y1_dets, x0_dets, x1_dets = get_corners(final_col_idxs, final_row_idxs, filter_coords)
 
@@ -88,7 +100,7 @@ def main():
             plt.imshow(filtered_kernel, cmap="gray")
             plt.title("Filtro de Convolución")
             plt.axis("off")
-            plt.savefig(os.path.join(plot_dir, f"conv_filter_{filename}.png"), bbox_inches="tight")
+            plt.savefig(os.path.join(plot_dir, f"conv_filter_{filename}.pdf"), bbox_inches="tight")
             plt.close()
 
             # -----------------------------------------
@@ -98,7 +110,7 @@ def main():
             plt.imshow(out, cmap="viridis")
             plt.colorbar()
             plt.title("Matriz de Activación")
-            plt.savefig(os.path.join(plot_dir, f"activation_matrix_{filename}.png"), bbox_inches="tight")
+            plt.savefig(os.path.join(plot_dir, f"activation_matrix_{filename}.pdf"), bbox_inches="tight")
             plt.close()
 
             # -----------------------------------------
@@ -115,27 +127,44 @@ def main():
             plt.legend(loc="best")
             plt.grid(True)
             plt.savefig(
-                os.path.join(plot_dir, f"histogram_{filename}.png"),
+                os.path.join(plot_dir, f"histogram_{filename}.pdf"),
                 bbox_inches="tight",
             )
             plt.close()
 
     # -----------------------------------------
-    # 4. Guardar Bounding Box image final
+    # 4. Guardar Bounding Box image final con LEYENDA
     # -----------------------------------------
     bb_img_rgb = cv2.cvtColor(final_bb_img, cv2.COLOR_BGR2RGB)
+
+    # Crear los manejadores (handles) de la leyenda manualmente
+    legend_patches = []
+    # Ordenamos las claves para que la leyenda salga en orden numérico (1, 2, 3...)
+    for fn in sorted(colors.keys()):
+        bgr_color = colors[fn]
+        # Convertir BGR (OpenCV) a RGB normalizado (0-1) para Matplotlib
+        rgb_color = (bgr_color[2] / 255.0, bgr_color[1] / 255.0, bgr_color[0] / 255.0)
+        # Limpiar el nombre del archivo para la etiqueta (ej: "1.png" -> "Número 1")
+        label = f"Número {fn.replace('.png', '')}"
+
+        # Crear un parche de color
+        patch = mpatches.Patch(color=rgb_color, label=label)
+        legend_patches.append(patch)
 
     plt.figure(figsize=(12, 12))
     plt.imshow(bb_img_rgb)
     plt.title("Distribución de Fichas (Cajas Coloreadas)")
     plt.axis("off")
+
+    # Añadir la leyenda. La posicionamos fuera del eje (bbox_to_anchor) para no tapar el tablero.
+    plt.legend(handles=legend_patches, title="Números", loc='upper left', bbox_to_anchor=(1, 1))
+
     plt.savefig(
-        os.path.join(plot_dir, "tablero_final_detectado.png"),
-        bbox_inches="tight",
+        os.path.join(plot_dir, "tablero_final_detectado.pdf"),
+        bbox_inches="tight", # Importante: asegura que la leyenda no se corte al guardar
     )
     plt.close()
 
-    print("¡Detección completada! Revisa la carpeta 'plots' para ver 'tablero_final_detectado.png'")
 
 if __name__ == "__main__":
     main()

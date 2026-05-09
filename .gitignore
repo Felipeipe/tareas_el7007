@@ -29,6 +29,8 @@ share/python-wheels/
 MANIFEST
 plots/
 coords_blackjack.npy
+*.mp4
+*.png
 *.npy
 # PyInstaller
 #   Usually these files are written by a python script from a template

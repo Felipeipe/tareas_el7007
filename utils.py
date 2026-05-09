@@ -1,5 +1,7 @@
 import os
 from typing import Tuple
+import torch
+import torchvision.models as models
 
 import cv2
 import numpy as np
@@ -70,6 +72,21 @@ def create_domino_conv_filters(img, conv_thresh, coord_filename):
     filter_coords = y0, y1, x0, x1
     exclamation_mark = binary_img[y0:y1, x0:x1]
     return convolution(exclamation_mark, kern), filter_coords
+
+
+def load_template(filename, img=None):
+    if img is not None:
+        y0, y1, x0, x1 = select_roi_opencv(img)
+        template = img[y0:y1, x0:x1]
+        cv2.imwrite(filename, template)
+        return template
+    else:
+        template = cv2.imread(filename)
+        template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY) # type: ignore
+
+        if template is None:
+            raise ValueError(f"Could not load {filename}")
+        return template
 
 def get_corners(cx, cy, filter_shape):
     "gets corner coordinates given the center of detections and size of filter"
@@ -174,6 +191,18 @@ def convolution(img: np.ndarray, filter: np.ndarray) -> np.ndarray:
             )
     return out
 
+def get_filters_from_vgg():
+    model = models.vgg16(weights='DEFAULT')
+    return torch.mean(model.features[0].weight.data, dim=1).cpu().numpy()
+
+def conv_2d(img, kern):
+    n_filters = kern.shape[0]
+    height, width = img.shape
+    filtered_temp = np.zeros((n_filters, height, width))
+    for i in range(n_filters):
+        filtered_temp[i,:,:] = cv2.filter2D(img, -1, kern[i,:,:])
+
+    return filtered_temp
 
 if __name__ == "__main__":
     img_name = "grid_symbols.png"
