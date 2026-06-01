@@ -1,6 +1,8 @@
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from skimage.filters.rank import entropy
+from skimage.morphology import disk
 
 
 def load_img(filepath):
@@ -9,6 +11,7 @@ def load_img(filepath):
 
 
 def plot_img(filepath, img, title=""):
+    "NOTE: img must be in BGR colorspace"
     if len(img.shape) == 3 and img.shape[2] == 3:
         img_disp = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cmap = None
@@ -51,6 +54,25 @@ def ring_mask(fft_img, inner_radius=40, outer_radius=100):
         mask, center=(w // 2, h // 2), radius=inner_radius, color=0, thickness=-1
     )
     return mask
+
+
+def kband(X_sym, mask):
+    return np.real(np.fft.ifftshift(X_sym * mask))
+
+
+def entropy_map(img):
+    """
+    NOTE: img must be on YCrCb colorspace
+    """
+    Y = img[:, :, 0]
+    E_raw = entropy(Y, disk(4))
+    E_min = E_raw.min()
+    E_max = E_raw.max()
+    if E_max - E_min == 0:
+        return np.zeros_like(E_raw, dtype=np.float64)
+    E_norm = (E_raw - E_min) / (E_max - E_min)
+
+    return E_norm
 
 
 def apply_watermark(mag, phase, X_sym, mask, alpha=1.0):
