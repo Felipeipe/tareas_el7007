@@ -1,4 +1,5 @@
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -8,8 +9,19 @@ def load_img(filepath):
 
 
 def plot_img(filepath, img, title=""):
-
-    pass
+    if len(img.shape) == 3 and img.shape[2] == 3:
+        img_disp = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        cmap = None
+    else:
+        img_disp = img
+        cmap = "gray"
+    plt.figure(figsize=(8, 8))
+    plt.imshow(img_disp, cmap=cmap)
+    if title:
+        plt.title(title)
+    plt.axis("off")
+    plt.savefig(filepath, bbox_inches="tight", pad_inches=0.1)
+    plt.close()
 
 
 def luma_fft(img):
@@ -32,8 +44,12 @@ def noise_img(fft_img):
 def ring_mask(fft_img, inner_radius=40, outer_radius=100):
     h, w = fft_img.shape
     mask = np.zeros(fft_img.shape)
-    cv2.circle(mask, center=(w // 2, h // 2), radius=outer_radius, color=1, thickness=-1)
-    cv2.circle(mask, center=(w // 2, h // 2), radius=inner_radius, color=0, thickness=-1)
+    cv2.circle(
+        mask, center=(w // 2, h // 2), radius=outer_radius, color=1, thickness=-1
+    )
+    cv2.circle(
+        mask, center=(w // 2, h // 2), radius=inner_radius, color=0, thickness=-1
+    )
     return mask
 
 
@@ -42,11 +58,16 @@ def apply_watermark(mag, phase, X_sym, mask, alpha=1.0):
     f_mod_shifted = mag_mod * np.exp(1j * phase)
     f_mod = np.fft.ifftshift(f_mod_shifted)
 
-    return np.clip(np.real(np.fft.ifft2(f_mod)),0, 255)
+    return np.clip(np.real(np.fft.ifft2(f_mod)), 0, 255)
+
 
 def PSNR(img, marked_img):
-    mse = np.mean((img-marked_img)**2)
-    return 10*np.log10(255**2/mse)
+    "NOTE, both images are expected to be on the same colorspace (ie, BGR, RGB...)"
+    img_f = img.astype(np.float64)
+    marked_f = marked_img.astype(np.float64)
+    mse = np.mean((img_f - marked_f) ** 2)
+    return 10 * np.log10(255**2 / mse)
+
 
 def PCC(marked_img, mask, X_sym):
     img_ycrcb = cv2.cvtColor(marked_img, cv2.COLOR_BGR2YCrCb)
