@@ -1,8 +1,8 @@
 import os
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
+import pywt
 
 from utils import (
     PCC,
@@ -23,11 +23,14 @@ from utils import (
 DOG_IMG_PATH = os.path.join("media", "perro.jpg")
 OUT_PART_1 = os.path.join("out", "pure_spread_spectrum")
 OUT_PART_2 = os.path.join("out", "spatial_adaptation")
-ALPHA = [0.1, 0.5, 2.0, 5.0]
+OUT_PART_3 = os.path.join("out", "wavelet_marking")
+ALPHA1 = [0.1, 0.5, 2.0, 5.0]
 ALPHA2 = [0.5, 20.0]
+ALPHA3 = [4.9]
 
 os.makedirs(OUT_PART_1, exist_ok=True)
 os.makedirs(OUT_PART_2, exist_ok=True)
+os.makedirs(OUT_PART_3, exist_ok=True)
 
 
 def main1():
@@ -43,7 +46,7 @@ def main1():
     all_true_corrs = []
     all_fake_corrs = [[] for _ in range(3)]
 
-    for alpha in ALPHA:
+    for alpha in ALPHA1:
         Y_mark = apply_watermark(fft_img, fft_phase, X_sym, mask, alpha)
 
         watermark_img_ycrcb = img.copy()
@@ -64,7 +67,7 @@ def main1():
         )
 
     plot_detections(
-        ALPHA,
+        ALPHA1,
         psnrs,
         all_true_corrs,
         all_fake_corrs,
@@ -107,19 +110,26 @@ def main2():
         psnrs.append(peak_snr)
 
         plot_img(
-            os.path.join(OUT_PART_2, f"perro_{alpha}.pdf"),
+            os.path.join(OUT_PART_2, f"perro_{alpha}.pdf"),  # yo
             bgr_img,
             title=f"Peak Signal-to-Noise Ratio = {peak_snr:.3f}dB",
         )
 
         true_corr, false_corrs = informed_detection(marked_img, true_key, false_keys)
-        true_corr_blind, false_corrs_blind = blind_detection(
+        true_corr_blind, false_corrs_blind, false_key = blind_detection(
             marked_img, K_band, false_k_bands
         )
 
         all_true_corrs.append(true_corr)
         all_true_corrs_blind.append(true_corr_blind)
-
+        rmse = np.sqrt((true_key - false_key) ** 2).mean()
+        diff = np.abs(true_key - false_key)
+        print(f"RMSE for {alpha = }: {rmse}")
+        plot_img(
+            os.path.join(OUT_PART_2, f"diff_{alpha}.pdf"),
+            diff,
+            title="Diferencia entre llaves en la detección informada y la detección ciega",
+        )
         for j in range(N_FALSE_KEYS):
             all_fake_corrs[j].append(false_corrs[j])
             all_fake_corrs_blind[j].append(false_corrs_blind[j])
@@ -140,6 +150,66 @@ def main2():
     )
 
 
+def main3():
+    N_FALSE_KEYS = 3
+    SEED = 10
+
+    img = load_img(DOG_IMG_PATH).astype(np.float64)
+
+    rng = np.random.default_rng(SEED)
+    Y = img[:, :, 0]
+    LL, (LH, HL, HH) = pywt.dwt2(Y, "haar")
+
+    X_key = rng.standard_normal(LL.shape)
+    fake_keys = [rng.standard_normal(LL.shape) for _ in range(N_FALSE_KEYS)]
+    psnrs = []
+    all_true_corrs = []
+    all_fake_corrs = [[] for _ in range(N_FALSE_KEYS)]
+
+    for alpha in ALPHA3:
+        HL_mark = HL + alpha * X_key
+        LH_mark = LH + alpha * X_key
+        coeffs_mark = (LL, (LH_mark, HL_mark, HH))
+        Y_mark = pywt.idwt2(coeffs_mark, "haar")
+
+        marked_img = img.copy()
+        marked_img[:, :, 0] = Y_mark
+
+        safe_marked_img = np.clip(marked_img, 0, 255)
+        current_psnr = PSNR(img, safe_marked_img)
+        psnrs.append(current_psnr)
+
+        bgr_marked = cv2.cvtColor(safe_marked_img.astype(np.uint8), cv2.COLOR_YCrCb2BGR)
+        plot_img(
+            os.path.join(OUT_PART_3, f"marked_img_alpha_{alpha}.pdf"),
+            bgr_marked,
+            title=f"Marcado Wavelet (Alpha={alpha}, PSNR={current_psnr:.2f}dB)",
+        )
+
+        Y_ext = marked_img[:, :, 0]
+
+        LL_ext, (LH_ext, HL_ext, HH_ext) = pywt.dwt2(Y_ext, "haar")
+
+
+        corr_true_HL = np.corrcoef(HL_ext.flatten(), X_key.flatten())[0, 1]
+        corr_true_LH = np.corrcoef(LH_ext.flatten(), X_key.flatten())[0,1]
+        all_true_corrs.append((corr_true_HL + corr_true_LH) / 2.0)
+
+        for j in range(N_FALSE_KEYS):
+            corr_fake_HL = np.corrcoef(HL_ext.flatten(), fake_keys[j].flatten())[0,1]
+            corr_fake_LH = np.corrcoef(LH_ext.flatten(), fake_keys[j].flatten())[0,1]
+            all_fake_corrs[j].append((corr_fake_HL + corr_fake_LH) / 2.0)
+
+    plot_detections(
+        ALPHA3,
+        psnrs,
+        all_true_corrs,
+        all_fake_corrs,
+        os.path.join(OUT_PART_3, "corr_alpha_dwt.pdf"),
+    )
+
+
 if __name__ == "__main__":
     main1()
     main2()
+    main3()

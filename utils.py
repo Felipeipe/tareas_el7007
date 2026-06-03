@@ -1,5 +1,3 @@
-import os
-
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -77,10 +75,10 @@ def informed_detection(marked_img, true_key, false_keys):
 def blind_detection(marked_img, true_k_band, false_k_bands):
     "marked_img must be on ycrcb colorspace"
     E = entropy_map(marked_img)
-    true_key = E * true_k_band
+    calculated_key = E * true_k_band
     false_keys = [E * fkband for fkband in false_k_bands]
-    true_corr, false_corrs = informed_detection(marked_img, true_key, false_keys)
-    return true_corr, false_corrs
+    true_corr, false_corrs = informed_detection(marked_img, calculated_key, false_keys)
+    return true_corr, false_corrs, calculated_key
 
 
 def entropy_map(img):
