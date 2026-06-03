@@ -16,6 +16,7 @@ test.py
 coords.npy
 eggs/
 .eggs/
+informe/
 lib/
 lib64/
 parts/
@@ -29,6 +30,7 @@ share/python-wheels/
 MANIFEST
 plots/
 coords_blackjack.npy
+comments.md
 *.mp4
 *.png
 *.npy
