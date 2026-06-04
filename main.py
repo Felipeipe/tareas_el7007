@@ -5,8 +5,8 @@ import numpy as np
 import pywt
 
 from utils import (
-    PCC,
     PSNR,
+    PCC_spread_spectrum,
     apply_watermark,
     blind_detection,
     entropy_map,
@@ -14,16 +14,24 @@ from utils import (
     kband,
     load_img,
     luma_fft,
+    mark_pure_spread_spectrum,
+    mark_spatial_adaptation,
+    mark_wavelet,
     noise_img,
     plot_detections,
     plot_img,
     ring_mask,
+    test_attacks,
+    thresh_dwt,
+    thresh_pss,
+    thresh_spatial_adaptation,
 )
 
 DOG_IMG_PATH = os.path.join("media", "perro.jpg")
 OUT_PART_1 = os.path.join("out", "pure_spread_spectrum")
 OUT_PART_2 = os.path.join("out", "spatial_adaptation")
 OUT_PART_3 = os.path.join("out", "wavelet_marking")
+OUT_PART_4 = os.path.join("out", "attack_resillience")
 ALPHA1 = [0.1, 0.5, 2.0, 5.0]
 ALPHA2 = [0.5, 20.0]
 ALPHA3 = [4.9]
@@ -31,6 +39,7 @@ ALPHA3 = [4.9]
 os.makedirs(OUT_PART_1, exist_ok=True)
 os.makedirs(OUT_PART_2, exist_ok=True)
 os.makedirs(OUT_PART_3, exist_ok=True)
+os.makedirs(OUT_PART_4, exist_ok=True)
 
 
 def main1():
@@ -52,9 +61,9 @@ def main1():
         watermark_img_ycrcb = img.copy()
         watermark_img_ycrcb[:, :, 0] = Y_mark
 
-        all_true_corrs.append(PCC(watermark_img_ycrcb, mask, X_sym))
+        all_true_corrs.append(PCC_spread_spectrum(watermark_img_ycrcb, mask, X_sym))
         for j, fk in enumerate(fake_keys):
-            all_fake_corrs[j].append(PCC(watermark_img_ycrcb, mask, fk))
+            all_fake_corrs[j].append(PCC_spread_spectrum(watermark_img_ycrcb, mask, fk))
 
         watermark_img_bgr = cv2.cvtColor(watermark_img_ycrcb, cv2.COLOR_YCrCb2BGR)
         current_psnr = PSNR(bgr_img, watermark_img_bgr)
@@ -190,14 +199,13 @@ def main3():
 
         LL_ext, (LH_ext, HL_ext, HH_ext) = pywt.dwt2(Y_ext, "haar")
 
-
         corr_true_HL = np.corrcoef(HL_ext.flatten(), X_key.flatten())[0, 1]
-        corr_true_LH = np.corrcoef(LH_ext.flatten(), X_key.flatten())[0,1]
+        corr_true_LH = np.corrcoef(LH_ext.flatten(), X_key.flatten())[0, 1]
         all_true_corrs.append((corr_true_HL + corr_true_LH) / 2.0)
 
         for j in range(N_FALSE_KEYS):
-            corr_fake_HL = np.corrcoef(HL_ext.flatten(), fake_keys[j].flatten())[0,1]
-            corr_fake_LH = np.corrcoef(LH_ext.flatten(), fake_keys[j].flatten())[0,1]
+            corr_fake_HL = np.corrcoef(HL_ext.flatten(), fake_keys[j].flatten())[0, 1]
+            corr_fake_LH = np.corrcoef(LH_ext.flatten(), fake_keys[j].flatten())[0, 1]
             all_fake_corrs[j].append((corr_fake_HL + corr_fake_LH) / 2.0)
 
     plot_detections(
@@ -209,7 +217,85 @@ def main3():
     )
 
 
+def main4():
+
+    ALPHA_PSS = 0.5
+    ALPHA_SPATIAL_ADAPTATION = 20.0
+    ALPHA_DWT = 4.9
+
+    T_pss = thresh_pss(ALPHA_PSS, DOG_IMG_PATH, OUT_PART_4)
+    marked_bgr_pss, X_sym_true, mask_pss = mark_pure_spread_spectrum(
+        DOG_IMG_PATH, ALPHA_PSS
+    )
+    marked_ycrcb_pss = cv2.cvtColor(marked_bgr_pss, cv2.COLOR_BGR2YCrCb)
+    orig_corr_pss = PCC_spread_spectrum(marked_ycrcb_pss, mask_pss, X_sym_true)
+
+    detect_pss = lambda img: PCC_spread_spectrum(
+        cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb), mask_pss, X_sym_true
+    )
+    test_attacks(
+        marked_bgr_pss,
+        "Pure_Spread_Spectrum",
+        T_pss,
+        orig_corr_pss,
+        OUT_PART_4,
+        detect_pss,
+    )
+
+    T_spatial = thresh_spatial_adaptation(
+        ALPHA_SPATIAL_ADAPTATION, DOG_IMG_PATH, OUT_PART_4
+    )
+    marked_img_bgr_sa, true_key_sa, K_band_sa, mask_sa = mark_spatial_adaptation(
+        DOG_IMG_PATH, ALPHA_SPATIAL_ADAPTATION
+    )
+
+    Y_sa = cv2.cvtColor(marked_img_bgr_sa, cv2.COLOR_BGR2YCrCb)[:, :, 0]
+    orig_corr_spatial = np.corrcoef(Y_sa.flatten(), true_key_sa.flatten())[0, 1]
+
+    detect_spatial = lambda img: np.corrcoef(
+        cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)[:, :, 0].flatten(), true_key_sa.flatten()
+    )[0, 1]
+    test_attacks(
+        marked_img_bgr_sa,
+        "Spatial_Adaptation",
+        T_spatial,
+        orig_corr_spatial,
+        OUT_PART_4,
+        detect_spatial,
+    )
+
+    T_dwt = thresh_dwt(ALPHA_DWT, DOG_IMG_PATH, OUT_PART_4)
+    marked_img_ycrcb_dwt, X_key_dwt = mark_wavelet(DOG_IMG_PATH, ALPHA_DWT)
+
+    marked_bgr_dwt = cv2.cvtColor(marked_img_ycrcb_dwt, cv2.COLOR_YCrCb2BGR)
+
+    Y_dwt = marked_img_ycrcb_dwt[:, :, 0].astype(np.float64)
+    _, (LH_ext, HL_ext, _) = pywt.dwt2(Y_dwt, "haar")
+    orig_corr_dwt = (
+        np.corrcoef(HL_ext.flatten(), X_key_dwt.flatten())[0, 1]
+        + np.corrcoef(LH_ext.flatten(), X_key_dwt.flatten())[0, 1]
+    ) / 2.0
+
+    def detect_dwt_lambda(img):
+        Y = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)[:, :, 0].astype(np.float64)
+        _, (lh, hl, _) = pywt.dwt2(Y, "haar")
+        return (
+            np.corrcoef(hl.flatten(), X_key_dwt.flatten())[0, 1]
+            + np.corrcoef(lh.flatten(), X_key_dwt.flatten())[0, 1]
+        ) / 2.0
+
+    test_attacks(
+        marked_bgr_dwt,
+        "Dominio_Wavelet",
+        T_dwt,
+        orig_corr_dwt,
+        OUT_PART_4,
+        detect_dwt_lambda,
+    )
+
+
 if __name__ == "__main__":
-    main1()
-    main2()
-    main3()
+    # main1()
+    # main2()
+    # main3()
+    main4()
