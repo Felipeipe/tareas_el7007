@@ -1,3 +1,0 @@
-Con valores muy altos de alpha se comienza a distorsionar de manera muy notoria la imagen. Aparecen patrones de guepardo en la imagen, especialmente notorio en el fondo plano de la imagen. Con valores muy pequeños la correlación de pearson comienza a ser más similar con las llaves falsas, especialmente con alphas pequeños (0.1). a pesar de esto, todavía puede ser diferenciable entre las llaves falsas y las verdaderas.
-
-Considerando que las marcas de agua no deberían ser visibles pero aún así deberían ser detectables conviene un valor de alpha = 0.1. Se debe estudiar si es que con valores más pequeños o cambiando el rango de frecuencias (cambiando el radio del anillo del filtro) pueden ser detectables aún.
