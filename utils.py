@@ -4,7 +4,12 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torchstain
-
+from skimage.filters import threshold_otsu
+from skimage.morphology import disk, opening, closing
+from skimage.segmentation import watershed
+from skimage.feature import peak_local_max
+from scipy import ndimage as ndi
+import cellpose
 
 def plot_histogram_rgb(img, filepath):
     "IMG must be on rgb colorspace"
@@ -96,6 +101,48 @@ def get_H_and_E_channels(img):
 
     return H_uint8, E_uint8
 
+def classic_segmentation(h_channel):
+    if len(h_channel.shape) == 3:
+        h_gray = cv2.cvtColor(h_channel, cv2.COLOR_RGB2GRAY)
+    else:
+        h_gray = h_channel
+    thresh = threshold_otsu(h_gray)
+    binary = h_gray < thresh
+
+    kernel = disk(3)
+    cleaned = closing(binary, kernel)
+    cleaned = opening(cleaned, kernel)
+
+    distance = ndi.distance_transform_edt(cleaned)
+
+    local_max_coords = peak_local_max(distance, min_distance=7, labels=cleaned)
+    local_max_mask = np.zeros(distance.shape, dtype=bool)
+    local_max_mask[tuple(local_max_coords.T)] = True
+
+    markers, _ = ndi.label(local_max_mask)
+
+    labels = watershed(-distance, markers, mask=cleaned)
+
+    return labels
+
+def deep_segmentation(img, model):
+    masks, flows, styles = model.eval(img, diameter=None, channels=[0, 0])
+
+    return masks
+
+def prediction_resize(pred_mask, ground_truth_mask):
+    return cv2.resize(pred_mask.astype(np.uint8), (ground_truth_mask.shape[1], ground_truth_mask.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+def compute_metrics(pred_mask, gt_mask):
+
+    pred_bin = pred_mask > 0
+    gt_bin = gt_mask > 0
+    intersection = np.logical_and(pred_bin, gt_bin).sum()
+    union = np.logical_or(pred_bin, gt_bin).sum()
+    dice = (2. * intersection) / (pred_bin.sum() + gt_bin.sum())
+    iou = intersection / (union)
+
+    return dice, iou
 
 if __name__ == "__main__":
     path = os.path.join("data", "images", "TCGA-A7-A13E-01Z-00-DX1.tif")
